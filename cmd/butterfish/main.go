@@ -101,14 +101,22 @@ type CliConfig struct {
 	bf.CliCommandConfig
 }
 
-func getOpenAIToken() string {
+//read variable pair-values from .env files for later use.
+func loadVariable(){
 	path, err := homedir.Expand(defaultEnvPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// We attempt to get a token from env vars plus an env file
-	godotenv.Load(path)
+	// We attempt to get enviromental varibles from env file
+	err := godotenv.Load()
+    if err != nil && !os.IsNotExist(err) {
+	    // Only crash if the file exists but failed to read or parse
+	    log.Fatalf("Error loading .env file: %v", err)
+    }
+}
+
+func getOpenAIToken() string {
 
 	token := os.Getenv("OPENAI_TOKEN")
 	if token != "" {
@@ -187,6 +195,7 @@ func main() {
 	// }()
 
 	desc := fmt.Sprintf("%s\n%s", description, getBuildInfo())
+	loadVariable()
 	cli := &CliConfig{}
 
 	cliParser, err := kong.New(cli,
