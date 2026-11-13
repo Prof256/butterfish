@@ -37,8 +37,9 @@ Prompts are stored in ~/.config/butterfish/prompts.yaml. Butterfish logs to the 
 If you do not have OpenAI free credits then you will need a subscription and you will need to pay for OpenAI API use. If you're using Shell Mode, autosuggest will probably be the most expensive part. You can reduce spend by disabling shell autosuggest (-A) or increasing the autosuggest timeout (e.g. -t 2000). See "butterfish shell --help".
 `
 const license = "MIT License - Copyright (c) 2023 Peter Bakkum"
-const defaultEnvPath = "~/.config/butterfish/butterfish.env"
-const defaultPromptPath = "~/.config/butterfish/prompts.yaml"
+const configDirName = "butterfish"
+const defaultEnvFilename = "butterfish.env"
+const defaultPromptFilename = "prompts.yaml"
 
 const shell_help = `Start the Butterfish shell wrapper. This wraps your existing shell, giving you access to LLM prompting by starting your command with a capital letter. LLM calls include prior shell context. This is great for keeping a chat-like terminal open, sending written prompts, debugging commands, and iterating on past actions.
 
