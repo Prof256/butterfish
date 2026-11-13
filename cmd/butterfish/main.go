@@ -12,7 +12,6 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/joho/godotenv"
-	"github.com/mitchellh/go-homedir"
 
 	//_ "net/http/pprof"
 
@@ -36,9 +35,11 @@ Prompts are stored in ~/.config/butterfish/prompts.yaml. Butterfish logs to the 
 
 If you do not have OpenAI free credits then you will need a subscription and you will need to pay for OpenAI API use. If you're using Shell Mode, autosuggest will probably be the most expensive part. You can reduce spend by disabling shell autosuggest (-A) or increasing the autosuggest timeout (e.g. -t 2000). See "butterfish shell --help".
 `
+
 const license = "MIT License - Copyright (c) 2023 Peter Bakkum"
-const defaultEnvPath = "~/.config/butterfish/butterfish.env"
-const defaultPromptPath = "~/.config/butterfish/prompts.yaml"
+const configDirName = "butterfish"
+const defaultEnvFilename = "butterfish.env"
+const defaultPromptFilename = "prompts.yaml"
 
 const shell_help = `Start the Butterfish shell wrapper. This wraps your existing shell, giving you access to LLM prompting by starting your command with a capital letter. LLM calls include prior shell context. This is great for keeping a chat-like terminal open, sending written prompts, debugging commands, and iterating on past actions.
 
@@ -47,7 +48,7 @@ Use:
   - Start a command with a capital letter to send it to GPT, like 'How do I recursively find local .py files?'
   - Autosuggest will print command completions, press tab to fill them in
   - GPT will be able to see your shell history, so you can ask contextual questions like 'why didnt my last command work?'
-	- Start a command with ! to enter Agent Mode, in which GPT will act as an agent attempting to accomplish your goal by executing commands, for example '!Run make in this directory and debug any problems'.
+	- Start a command with ! to enter Agent Mode, in which GPT will act as an agent attempting to accomplish your goal by executing commands, for example '!Run make in this directory and debug any problems'
 	- Start a command with !! to enter Unsafe Agent Mode, in which GPT will execute commands without confirmation. USE WITH CAUTION.
 	- Start a command with @ to enter Action Mode, in which GPT will attempt exactly one shell command for your request or decline if a single command doesn't make sense.
 	- Start a command with @@ to auto-execute the Action Mode command immediately. USE WITH CAUTION.
@@ -101,23 +102,29 @@ type CliConfig struct {
 	bf.CliCommandConfig
 }
 
-//read variable pair-values from .env files for later use.
-func loadVariable(){
-	path, err := homedir.Expand(defaultEnvPath)
+func butterfishConfigPath(filename string) (string, error) {
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("determine user config directory: %w", err)
+	}
+	return filepath.Join(configDir, configDirName, filename), nil
+}
+
+//read variable pair-values from .env files for later use.
+func loadVariable() {
+	path, err := butterfishConfigPath(defaultEnvFilename)
+	if err != nil {
+		log.Fatalf("Error determining config path: %v", err)
 	}
 
 	// We attempt to get enviromental varibles from env file
-	err := godotenv.Load()
-    if err != nil && !os.IsNotExist(err) {
-	    // Only crash if the file exists but failed to read or parse
-	    log.Fatalf("Error loading .env file: %v", err)
-    }
+	if err := godotenv.Load(path); err != nil && !os.IsNotExist(err) {
+		// Only crash if the file exists but failed to read or parse
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 }
 
 func getOpenAIToken() string {
-
 	token := os.Getenv("OPENAI_TOKEN")
 	if token != "" {
 		return token
@@ -141,6 +148,12 @@ func getOpenAIToken() string {
 		log.Fatal("Invalid token provided, exiting")
 	}
 
+	path, err := butterfishConfigPath(defaultEnvFilename)
+	if err != nil {
+		fmt.Printf("Error determining config path: %s\n", err)
+		return token
+	}
+
 	// attempt to write a .env file
 	fmt.Printf("\nSaving token to %s\n", path)
 	err = os.MkdirAll(filepath.Dir(path), 0755)
@@ -149,7 +162,7 @@ func getOpenAIToken() string {
 		return token
 	}
 
-	envFile, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
+	envFile, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		fmt.Printf("Error creating file: %s\n", err.Error())
 		return token
@@ -172,7 +185,11 @@ func makeButterfishConfig(options *CliConfig) *bf.ButterfishConfig {
 	config.OpenAIToken = getOpenAIToken()
 	config.BaseURL = options.BaseURL
 	config.ServiceTier = options.ServiceTier
-	config.PromptLibraryPath = defaultPromptPath
+	promptPath, err := butterfishConfigPath(defaultPromptFilename)
+	if err != nil {
+		log.Fatalf("Error determining prompt config path: %v", err)
+	}
+	config.PromptLibraryPath = promptPath
 	config.TokenTimeout = time.Duration(options.TokenTimeout) * time.Millisecond
 
 	if options.Verbose {
