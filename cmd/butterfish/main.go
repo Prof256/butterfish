@@ -27,27 +27,28 @@ var ( // these are filled in at build time
 
 const description = `Do useful things with LLMs from the command line, with a bent towards software engineering.
 
-Butterfish is a command line tool for working with LLMs. It has two modes: CLI command mode, used to prompt LLMs and generate commands, and Shell mode: Wraps your local shell to provide easy prompting[...]
+Butterfish is a command line tool for working with LLMs. It has two modes: CLI command mode, used to prompt LLMs and generate commands, and Shell mode: Wraps your local shell to provide easy prompting and autocomplete.
 
 Butterfish looks for an API key in OPENAI_API_KEY, or alternatively stores an OpenAI auth token at ~/.config/butterfish/butterfish.env.
 
-Prompts are stored in ~/.config/butterfish/prompts.yaml. Butterfish logs to the system temp dir, usually to /var/tmp/butterfish.log. To print the full prompts and responses from the OpenAI API, use th[...]
+Prompts are stored in ~/.config/butterfish/prompts.yaml. Butterfish logs to the system temp dir, usually to /var/tmp/butterfish.log. To print the full prompts and responses from the OpenAI API, use the --verbose flag. Support can be found at https://github.com/bakks/butterfish.
 
-If you do not have OpenAI free credits then you will need a subscription and you will need to pay for OpenAI API use. If you're using Shell Mode, autosuggest will probably be the most expensive part. [...]
+If you do not have OpenAI free credits then you will need a subscription and you will need to pay for OpenAI API use. If you're using Shell Mode, autosuggest will probably be the most expensive part. You can reduce spend by disabling shell autosuggest (-A) or increasing the autosuggest timeout (e.g. -t 2000). See "butterfish shell --help".
 `
+
 const license = "MIT License - Copyright (c) 2023 Peter Bakkum"
 const configDirName = "butterfish"
 const defaultEnvFilename = "butterfish.env"
 const defaultPromptFilename = "prompts.yaml"
 
-const shell_help = `Start the Butterfish shell wrapper. This wraps your existing shell, giving you access to LLM prompting by starting your command with a capital letter. LLM calls include prior shell[...]
+const shell_help = `Start the Butterfish shell wrapper. This wraps your existing shell, giving you access to LLM prompting by starting your command with a capital letter. LLM calls include prior shell context. This is great for keeping a chat-like terminal open, sending written prompts, debugging commands, and iterating on past actions.
 
 Use:
   - Type a normal command, like 'ls -l' and press enter to execute it
   - Start a command with a capital letter to send it to GPT, like 'How do I recursively find local .py files?'
   - Autosuggest will print command completions, press tab to fill them in
   - GPT will be able to see your shell history, so you can ask contextual questions like 'why didnt my last command work?'
-	- Start a command with ! to enter Agent Mode, in which GPT will act as an agent attempting to accomplish your goal by executing commands, for example '!Run make in this directory and debug any proble[...]'
+	- Start a command with ! to enter Agent Mode, in which GPT will act as an agent attempting to accomplish your goal by executing commands, for example '!Run make in this directory and debug any problems'
 	- Start a command with !! to enter Unsafe Agent Mode, in which GPT will execute commands without confirmation. USE WITH CAUTION.
 	- Start a command with @ to enter Action Mode, in which GPT will attempt exactly one shell command for your request or decline if a single command doesn't make sense.
 	- Start a command with @@ to auto-execute the Action Mode command immediately. USE WITH CAUTION.
@@ -57,7 +58,7 @@ Here are special Butterfish commands:
   - Status : Show the current Butterfish configuration.
   - History : Print out the history that would be sent in a GPT prompt.
 
-If you do not have OpenAI free credits then you will need a subscription and you will need to pay for OpenAI API use. Autosuggest will probably be the most expensive feature. You can reduce spend by d[...]`
+If you do not have OpenAI free credits then you will need a subscription and you will need to pay for OpenAI API use. Autosuggest will probably be the most expensive feature. You can reduce spend by disabling shell autosuggest (-A) or increasing the autosuggest timeout (e.g. -t 2000).`
 
 type VerboseFlag bool
 
@@ -85,14 +86,14 @@ type CliConfig struct {
 	Shell struct {
 		Bin                       string `short:"b" help:"Shell to use (e.g. /bin/zsh), defaults to $SHELL."`
 		Model                     string `short:"m" default:"gpt-5.5" help:"Model for when the user manually enters a prompt."`
-		ReasoningEffort           string `short:"r" default:"high" help:"Reasoning effort for shell prompting, Agent Mode, and Action Mode. Autosuggest uses its own low-latency reasoning setting and this is[... ]"`
+		ReasoningEffort           string `short:"r" default:"high" help:"Reasoning effort for shell prompting, Agent Mode, and Action Mode. Autosuggest uses its own low-latency reasoning setting and this is automatically disabled for models that don't support reasoning."`
 		AutosuggestDisabled       bool   `short:"A" default:"false" help:"Disable autosuggest."`
 		AutosuggestModel          string `short:"a" default:"gpt-5.4-mini" help:"Model for autosuggest"`
 		AutosuggestTimeout        int    `short:"t" default:"500" help:"Delay after typing before autosuggest (lower values trigger more calls and are more expensive). In milliseconds."`
 		NewlineAutosuggestTimeout int    `short:"T" default:"3500" help:"Timeout for autosuggest on a fresh line, i.e. before a command has started. Negative values disable. In milliseconds."`
-		NoCommandPrompt           bool   `short:"p" default:"false" help:"Don't change command prompt (shell PS1 variable). If not set, an emoji will be added to the prompt as a reminder you're in Shell Mod[...]"`
+		NoCommandPrompt           bool   `short:"p" default:"false" help:"Don't change command prompt (shell PS1 variable). If not set, an emoji will be added to the prompt as a reminder you're in Shell Mode."`
 		MaxPromptTokens           int    `short:"P" default:"32768" help:"Maximum number of tokens, we restrict calls to this size regardless of model capabilities."`
-		MaxHistoryBlockTokens     int    `short:"H" default:"1024" help:"Maximum number of tokens of each block of history. For example, if a command has a very long output, it will be truncated to this len[... ]"`
+		MaxHistoryBlockTokens     int    `short:"H" default:"1024" help:"Maximum number of tokens of each block of history. For example, if a command has a very long output, it will be truncated to this length when sending the shell's history."`
 		MaxResponseTokens         int    `short:"R" default:"0" help:"Maximum number of output tokens in a shell response. The default 0 omits the API cap."`
 	} `cmd:"" help:"${shell_help}"`
 
